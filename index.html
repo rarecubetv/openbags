@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Token - Bags SDK</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎒</text></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/base-58@0.0.1/Base58.min.js"></script>
+    <script>
+        // Adapt Base58 library to bs58 interface
+        if (typeof Base58 !== 'undefined' && Base58.decode) {
+            window.bs58 = {
+                decode: function(str) {
+                    return Base58.decode(str);
+                }
+            };
+            console.log('✅ Base58 library loaded and adapted to bs58 interface');
+            
+            try {
+                const testResult = Base58.decode('5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ');
+                console.log('✅ Base58 decode test successful:', testResult.length, 'bytes');
+            } catch (error) {
+                console.error('❌ Base58 decode test failed:', error);
+            }
+        } else {
+            console.error('❌ Base58 library not loaded properly');
+            
+            window.bs58 = {
+                decode: function(s) {
+                    const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+                    const base = alphabet.length;
+                    
+                    let decoded = 0n;
+                    let multi = 1n;
+                    
+                    for (let i = s.length - 1; i >= 0; i--) {
+                        const char = s[i];
+                        const index = alphabet.indexOf(char);
+                        if (index === -1) {
+                            throw new Error('Invalid base58 character: ' + char);
+                        }
+                        decoded += BigInt(index) * multi;
+                        multi *= BigInt(base);
+                    }
+                    
+                    const bytes = [];
+                    while (decoded > 0n) {
+                        bytes.unshift(Number(decoded % 256n));
+                        decoded = decoded / 256n;
+                    }
+                    
+                    for (let i = 0; i < s.length && s[i] === '1'; i++) {
+                        bytes.unshift(0);
+                    }
+                    
+                    return new Uint8Array(bytes);
+                }
+            };
+            console.log('✅ Fallback bs58 decoder implemented');
+        }
+    </script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'bags-dark': '#0a0a0a',
+                        'bags-gray': '#1a1a1a',
+                        'bags-border': '#2a2a2a',
+                        'bags-green': '#00ff88',
+                        'bags-blue': '#3b82f6',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background: #0a0a0a;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        .upload-area {
+            border: 2px dashed #2a2a2a;
+            transition: all 0.3s ease;
+            background: #1a1a1a;
+        }
+        
+        .upload-area:hover {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.05);
+        }
+        
+        .upload-area.dragover {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+        }
+        
+        .form-input {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            color: #ffffff;
+            transition: all 0.2s ease;
+        }
+        
+        .form-input:focus {
+            border-color: #3b82f6;
+            outline: none;
+            box-shadow: 0 0 0 1px #3b82f6;
+        }
+        
+        .form-input::placeholder {
+            color: #666666;
+        }
+        
+        .wallet-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 50;
+        }
+        
+        .social-platform {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            transition: all 0.2s ease;
+        }
+        
+        .social-platform.active {
+            background: #00ff88;
+            border-color: #00ff88;
+            color: #000000;
+        }
+        
+        .fee-slider {
+            background: #2a2a2a;
+            height: 6px;
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .fee-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #00ff88;
+            cursor: pointer;
+        }
+        
+        .fee-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #00ff88;
+            cursor: pointer;
+            border: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-white bg-bags-dark">
+    <!-- Wallet Button (Fixed Position) -->
+    <div class="wallet-button">
+        <div class="flex items-center space-x-3">
+            <div id="walletBalance" class="hidden items-center space-x-2 text-sm text-gray-400 bg-bags-gray px-3 py-2 rounded-lg border border-bags-border">
+                <span id="balanceAmount">0.000 SOL</span>
+                <span class="text-gray-600">|</span>
+                <span id="balanceUsd">$0.00</span>
+            </div>
+            <button id="connectWalletBtn" 
+                    class="bg-bags-green hover:bg-green-400 text-black px-4 py-2 rounded-lg font-medium transition-all duration-200">
+                Connect Wallet
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="max-w-2xl mx-auto px-6 py-12">
+        <!-- Token Creation Form -->
+        <div class="space-y-8">
+            
+            <form id="tokenForm" class="space-y-8">
+                <!-- Image Upload -->
+                <div class="space-y-3">
+                    <div id="uploadArea" class="upload-area rounded-2xl p-12 text-center cursor-pointer">
+                        <div id="uploadContent" class="space-y-4">
+                            <div class="w-20 h-20 mx-auto bg-bags-green/20 rounded-2xl flex items-center justify-center">
+                                <svg class="w-10 h-10 text-bags-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-white font-medium text-lg">Drop your image here or click to browse</p>
+                                <p class="text-gray-400 text-sm mt-1">PNG, JPG, JPEG, GIF, WebP up to 15MB</p>
+                            </div>
+                        </div>
+                        <div id="imagePreviewContainer" class="hidden space-y-4">
+                            <img id="imagePreview" class="w-32 h-32 mx-auto rounded-2xl object-cover border-2 border-bags-green" />
+                            <div id="imageInfo" class="text-sm text-gray-400"></div>
+                            <button type="button" id="removeImage" class="text-red-400 hover:text-red-300 text-sm transition-colors">
+                                Remove Image
+                            </button>
+                        </div>
+                    </div>
+                    <input type="file" id="tokenImage" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" class="hidden" />
+                </div>
+
+                <!-- Token Details -->
+                <div class="space-y-6">
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-400">Name</label>
+                        <input type="text" id="tokenName" placeholder="My Awesome Token" 
+                               class="form-input w-full px-4 py-3 rounded-xl" />
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-400">Ticker</label>
+                        <input type="text" id="tokenSymbol" placeholder="MAT" 
+                               class="form-input w-full px-4 py-3 rounded-xl" />
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-400">Description</label>
+                        <textarea id="tokenDescription" rows="4" placeholder="Describe your token..."
+                                  class="form-input w-full px-4 py-3 rounded-xl resize-none"></textarea>
+                    </div>
+                </div>
+
+                <!-- Fee Sharing Section -->
+                <div class="space-y-6">
+                    <div class="space-y-3">
+                        <label class="block text-sm font-medium text-gray-400">Share fees (optional)</label>
+                        
+                        <!-- Twitter Platform (Only Option) -->
+                        <div class="flex items-center space-x-3">
+                            <button type="button" id="twitterBtn" class="social-platform active flex items-center justify-center px-4 py-3 rounded-xl transition-colors">
+                                <span class="text-xl font-bold">𝕏</span>
+                            </button>
+                            <div class="flex-1">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-gray-400">@</span>
+                                    <input type="text" id="socialUsername" placeholder="elonmusk" 
+                                           class="form-input flex-1 px-3 py-2 rounded-lg text-sm" />
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Enter just the username (no @ or links)</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Fee Split Info -->
+                        <div id="feeShareInfo" class="hidden text-sm text-gray-400 bg-bags-gray p-4 rounded-xl border border-bags-border">
+                            <p>The Twitter user above will be able to claim <span id="theirPercent" class="text-white font-medium">90</span>% of the fees generated by this coin, you will receive the remaining <span id="yourPercent" class="text-white font-medium">10</span>%</p>
+                        </div>
+
+                        <!-- Fee Split Controls -->
+                        <div id="feeSplitControls" class="hidden space-y-4">
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-400">You: <span id="yourPercentDisplay" class="text-white font-medium">10</span>%</span>
+                                    <span class="text-gray-400">Them: <span id="theirPercentDisplay" class="text-white font-medium">90</span>%</span>
+                                </div>
+                                <input type="range" id="feeSlider" min="5" max="95" value="10" 
+                                       class="fee-slider w-full cursor-pointer" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Initial Buy -->
+                <div class="space-y-3">
+                    <label class="block text-sm font-medium text-gray-400">Initial buy (optional)</label>
+                    <div class="flex items-center space-x-3">
+                        <div class="flex items-center space-x-2 text-gray-400">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                            </svg>
+                        </div>
+                        <input type="number" id="initialBuy" step="0.001" min="0" placeholder="0.00" 
+                               class="form-input flex-1 px-4 py-3 rounded-xl" />
+                        <span class="text-gray-400 text-sm">SOL</span>
+                    </div>
+                    <p class="text-xs text-gray-500">We recommend a minimum 0.2 SOL initial buy to avoid snipers. Make sure to leave ~0.05 SOL for transaction fees.</p>
+                    
+                    <!-- Cost Breakdown -->
+                    <div id="costBreakdown" class="hidden space-y-2 p-3 bg-bags-gray rounded-lg border border-bags-border">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-400">Initial buy:</span>
+                            <span id="initialBuyAmount" class="text-white">0.00 SOL</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-400">Est. transaction fees:</span>
+                            <span class="text-white">~0.05 SOL</span>
+                        </div>
+                        <div class="border-t border-bags-border pt-2 flex justify-between text-sm font-medium">
+                            <span class="text-white">Total cost:</span>
+                            <div class="text-right">
+                                <div id="totalCostSOL" class="text-white">0.05 SOL</div>
+                                <div id="totalCostUSD" class="text-gray-400 text-xs">$--</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="walletBalanceDisplay" class="hidden flex items-center justify-between text-sm">
+                        <div class="flex items-center space-x-2 text-gray-400">
+                            <svg class="w-4 h-4 text-bags-green" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                            </svg>
+                            <span id="balanceDisplay">-- SOL</span>
+                        </div>
+                        <span class="text-gray-400" id="usdValue">$--</span>
+                    </div>
+                </div>
+
+                <!-- More Options -->
+                <div class="space-y-4">
+                    <button type="button" id="moreOptionsBtn" class="flex items-center space-x-2 text-bags-green hover:text-green-400 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                        <span class="text-sm font-medium">More options</span>
+                    </button>
+                    
+                    <div id="moreOptions" class="hidden space-y-4">
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-400">Website</label>
+                            <input type="url" id="websiteLink" placeholder="https://mytoken.com" 
+                                   class="form-input w-full px-4 py-3 rounded-xl" />
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-400">Twitter</label>
+                            <input type="url" id="twitterLink" placeholder="https://twitter.com/mytoken" 
+                                   class="form-input w-full px-4 py-3 rounded-xl" />
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-400">Telegram</label>
+                            <input type="url" id="telegramLink" placeholder="https://t.me/mytoken" 
+                                   class="form-input w-full px-4 py-3 rounded-xl" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Launch Button -->
+                <button type="submit" id="launchBtn" disabled
+                        class="w-full py-4 bg-bags-green hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-xl font-semibold text-lg text-black disabled:text-gray-400 transition-all duration-200">
+                    <span id="launchBtnText">Connect Wallet to Launch</span>
+                    <div id="launchSpinner" class="hidden inline-block w-5 h-5 ml-2 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
+                </button>
+            </form>
+        </div>
+    </main>
+
+    <!-- Results Modal -->
+    <div id="resultsModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-bags-dark border border-bags-border rounded-2xl p-8 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-white">Transaction Result</h3>
+                <button id="closeModal" class="text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div id="resultsContent" class="space-y-4">
+                <!-- Results will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
