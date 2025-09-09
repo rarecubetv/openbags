@@ -1,10 +1,8 @@
-# Bags SDK UI - Modern Token Launcher
+# OpenBags - Bags.FM Token Launcher UI
 
-A beautiful, modern web interface for launching tokens with fee sharing using the Bags SDK. Built with Tailwind CSS and vanilla JavaScript, following the official Bags file upload guide.
-
+Interface for launching tokens with fee sharing using the Bags SDK. 
 ## ✨ Features
 
-- 🎨 **Modern UI**: Beautiful glass-morphism design with Tailwind CSS
 - 🔗 **Wallet Integration**: Seamless Phantom wallet connection
 - 📁 **File Upload**: Drag & drop image upload following Bags guidelines
 - 🤝 **Fee Sharing**: Easy fee splitting with Twitter/Instagram users
