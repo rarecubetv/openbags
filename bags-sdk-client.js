@@ -324,7 +324,7 @@ export class BagsSDKClient {
         }
 
         // Extract IPFS hash from metadata URL
-        const ipfsHash = tokenInfo.tokenMetadata ? 
+        const ipfsHash = tokenInfo.tokenMetadata ?
             tokenInfo.tokenMetadata.replace('https://ipfs.io/ipfs/', '') : null;
 
         // Create the launch transaction payload

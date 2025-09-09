@@ -1,5 +1,5 @@
 // Test script to verify fee share config format
-import { BagsSDKClient } from './bags-sdk-client.js';
+import { BagsSDKClient } from '../bags-sdk-client.js';
 
 async function testFeeShareConfig() {
     console.log('🧪 Testing Fee Share Config Format');
