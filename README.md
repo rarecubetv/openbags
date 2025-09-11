@@ -1,6 +1,6 @@
 # OpenBags - Bags Token Launcher
 
-A modern web interface for creating Solana tokens with fee sharing capabilities using the Bags SDK.
+A modern web interface for creating Solana tokens with fee sharing capabilities using the Bags.Fm API
 
 ## Features
 
